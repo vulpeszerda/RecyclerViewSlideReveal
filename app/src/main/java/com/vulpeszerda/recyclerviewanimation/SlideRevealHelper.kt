@@ -1,10 +1,10 @@
 package com.vulpeszerda.recyclerviewanimation
 
 import android.animation.Animator
-import android.animation.AnimatorSet
 import android.animation.ValueAnimator
 import android.support.v7.widget.LinearLayoutManager
 import android.support.v7.widget.RecyclerView
+import android.util.Log
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.animation.AccelerateDecelerateInterpolator
@@ -12,34 +12,41 @@ import android.view.animation.AccelerateDecelerateInterpolator
 /**
  * Created by vulpes on 2017. 6. 27..
  */
-class SlideRevealHelper(
-        private val viewHolderAnimationDuration: Long = 200L,
-        private val viewHolderAnimationOffset: Long = 30L) {
+class SlideRevealHelper(private val maxAnimationDuration: Long = 500L,
+                        private val singleViewHolderAnimationRatio: Float = 1f / 3) {
 
     private var recyclerView: RecyclerView? = null
     private var prevGlobalLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     private var animator: Animator? = null
 
-    private var appliedVisibility = false
-    var visible: Boolean = false
+    private var lastRequestedWithAnim = false
+    private var lastRequestedReveal = 0.0f
+
+    private var appliedReveal = 0.0f
         set(value) {
             val prev = field
             field = value
             if (prev != value) {
-                onVisibilityChanged(value)
+                onAppliedRevealChanged(value)
             }
         }
 
-    var canScroll: Boolean = true
-        private set
+
+    var canScroll: Boolean = false
+        get() = lastRequestedReveal == appliedReveal
 
     fun onBindViewHolder(viewHolder: RecyclerView.ViewHolder?, position: Int) {
-        (viewHolder as? ViewHolder)?.fraction = if (appliedVisibility) 1f else 0f
+        (viewHolder as? ViewHolder)?.let {
+            val manager = recyclerView!!.layoutManager as? LinearLayoutManager ?: return
+            val first = manager.findFirstVisibleItemPosition()
+            val last = manager.findLastVisibleItemPosition()
+            applyRevealFractionToViewHolder(it, position, first, last)
+        }
     }
 
     fun onAttachedToRecyclerView(recyclerView: RecyclerView?) {
         this.recyclerView = recyclerView
-        this.recyclerView?.visibility = if (visible) View.VISIBLE else View.GONE
+        updateReveal(lastRequestedReveal, lastRequestedWithAnim)
     }
 
     fun onDetachedFromRecyclerView(recyclerView: RecyclerView?) {
@@ -54,7 +61,10 @@ class SlideRevealHelper(
         (holder as? ViewHolder)?.onDetachedToRecyclerView()
     }
 
-    private fun onVisibilityChanged(visible: Boolean) {
+    fun updateReveal(reveal: Float, withAnim: Boolean) {
+        lastRequestedReveal = reveal
+        lastRequestedWithAnim = withAnim
+
         val recyclerView = this.recyclerView ?: return
         val viewTreeObserver = recyclerView.viewTreeObserver
         if (!viewTreeObserver.isAlive) {
@@ -64,11 +74,11 @@ class SlideRevealHelper(
             viewTreeObserver.removeOnGlobalLayoutListener(it)
         }
         if (recyclerView.visibility == View.VISIBLE) {
-            playViewHolderAnimation(recyclerView, visible)
-        } else {
+            updateRevealInternal(reveal, withAnim)
+        } else if (reveal != appliedReveal || reveal > 0f) {
             prevGlobalLayoutListener = object : ViewTreeObserver.OnGlobalLayoutListener {
                 override fun onGlobalLayout() {
-                    playViewHolderAnimation(recyclerView, visible)
+                    updateRevealInternal(reveal, withAnim)
                     val observer = recyclerView.viewTreeObserver
                     if (observer.isAlive) {
                         observer.removeOnGlobalLayoutListener(this)
@@ -81,54 +91,95 @@ class SlideRevealHelper(
         }
     }
 
-    private fun playViewHolderAnimation(recyclerView: RecyclerView, visible: Boolean) {
-        animator?.cancel()
-        animator = createViewHolderAnimator(recyclerView, visible)
-                ?.apply {
-                    addListener(object : Animator.AnimatorListener {
+    private fun updateRevealInternal(reveal: Float, withAnim: Boolean) {
+        if (withAnim && reveal != appliedReveal) {
+            animator?.cancel()
 
-                        private var cancelled: Boolean = false
+            val toValue = reveal
+            val fromValue = appliedReveal
 
-                        override fun onAnimationRepeat(animation: Animator?) {
-                        }
+            animator = ValueAnimator.ofFloat(fromValue, toValue)
+                    .apply {
+                        duration = (maxAnimationDuration * Math.abs(fromValue - toValue)).toLong()
+                        interpolator = AccelerateDecelerateInterpolator()
+                        addUpdateListener(animatorListener)
+                        addListener(animatorListener)
+                        start()
+                    }
+        } else {
+            appliedReveal = reveal
+        }
+    }
 
-                        override fun onAnimationEnd(animation: Animator?) {
-                            if (!cancelled) {
-                                appliedVisibility = visible
-                                if (!visible) {
-                                    recyclerView.visibility = View.GONE
-                                }
-                            }
-                            canScroll = true
-                        }
+    private fun onAppliedRevealChanged(reveal: Float) {
+        recyclerView?.let {
+            forEachVisibleViewHolder(it, this::applyRevealFractionToViewHolder)
+        }
+        if (reveal == 0f) {
+            recyclerView?.visibility = View.GONE
+        }
+    }
 
-                        override fun onAnimationCancel(animation: Animator?) {
-                            cancelled = true
-                        }
+    private fun applyRevealFractionToViewHolder(viewHolder: ViewHolder,
+                                                index: Int,
+                                                first: Int,
+                                                last: Int) {
+        val fixedIndex = Math.max(Math.min(last, index), first)
+        val singleFraction = singleViewHolderAnimationRatio
+        val childCount = last - first
+        val cascadeFraction = (1f - singleFraction) / childCount
+        val startFraction = (fixedIndex - first) * cascadeFraction
+        viewHolder.fraction = Math.min(
+                Math.max((appliedReveal - startFraction) / singleFraction, 0f), 1f)
+    }
 
-                        override fun onAnimationStart(animation: Animator?) {
-                            canScroll = false
-                        }
-                    })
-                    start()
+    private inline fun forEachVisibleViewHolder(
+            recyclerView: RecyclerView,
+            block: (ViewHolder, Int, Int, Int) -> Unit) {
+
+        val manager = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val first = manager.findFirstVisibleItemPosition()
+        val last = manager.findLastVisibleItemPosition()
+        return (first..last)
+                .forEach { index ->
+                    (recyclerView.findViewHolderForAdapterPosition(index) as? ViewHolder)
+                            ?.let { block.invoke(it, index, first, last) }
                 }
     }
 
-    private fun createViewHolderAnimator(recyclerView: RecyclerView, visible: Boolean): Animator? {
-        val manager = recyclerView.layoutManager as? LinearLayoutManager ?: return null
-        val first = manager.findFirstVisibleItemPosition()
-        val last = manager.findLastVisibleItemPosition()
-        val animations: List<Animator> = (first..last)
-                .map { index ->
-                    (recyclerView.findViewHolderForAdapterPosition(index) as? ViewHolder)
-                            ?.createAnimation(
-                                    visible,
-                                    viewHolderAnimationOffset * (index - first),
-                                    viewHolderAnimationDuration)
-                }
-                .filterNotNull()
+    private val animatorListener = object :
+            Animator.AnimatorListener, ValueAnimator.AnimatorUpdateListener {
 
-        return AnimatorSet().apply { playTogether(animations) }
+        private var cancelled: Boolean = false
+
+        override fun onAnimationUpdate(animation: ValueAnimator?) {
+            animation?.let { appliedReveal = it.animatedValue as Float }
+        }
+
+        override fun onAnimationRepeat(animation: Animator?) {
+        }
+
+        override fun onAnimationEnd(animation: Animator?) {
+            recyclerView?.let {
+                forEachVisibleViewHolder(it) { viewHolder, _, _, _ ->
+                    viewHolder.itemView.setHasTransientState(false)
+                }
+            }
+            animator = null
+        }
+
+        override fun onAnimationCancel(animation: Animator?) {
+            cancelled = true
+        }
+
+        override fun onAnimationStart(animation: Animator?) {
+            cancelled = false
+            recyclerView?.let {
+                forEachVisibleViewHolder(it) { viewHolder, _, _, _ ->
+                    viewHolder.itemView.setHasTransientState(true)
+                }
+            }
+        }
     }
 
     open class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -136,33 +187,11 @@ class SlideRevealHelper(
         var fraction: Float = 1f
             set(value) {
                 field = value
-                applyAnimationFraction(value)
+                applyRevealFraction(value)
             }
-
-        private val animatorListener = object :
-                Animator.AnimatorListener, ValueAnimator.AnimatorUpdateListener {
-
-            override fun onAnimationUpdate(animation: ValueAnimator?) {
-                animation?.let { fraction = it.animatedValue as Float }
-            }
-
-            override fun onAnimationRepeat(animation: Animator?) {
-            }
-
-            override fun onAnimationEnd(animation: Animator?) {
-                itemView.setHasTransientState(false)
-            }
-
-            override fun onAnimationCancel(animation: Animator?) {
-            }
-
-            override fun onAnimationStart(animation: Animator?) {
-                itemView.setHasTransientState(true)
-            }
-        }
 
         private val layoutListener = ViewTreeObserver.OnGlobalLayoutListener {
-            applyAnimationFraction(fraction)
+            applyRevealFraction(fraction)
         }
 
         fun onAttachedToRecyclerView() {
@@ -181,21 +210,8 @@ class SlideRevealHelper(
             }
         }
 
-        fun createAnimation(visible: Boolean, startOffset: Long, maxDuration: Long): Animator {
-            val toValue = if (visible) 1f else 0f
-            val fromValue = fraction
-            return ValueAnimator.ofFloat(fromValue, toValue)
-                    .apply {
-                        duration = (maxDuration * Math.abs(fromValue - toValue)).toLong()
-                        startDelay = startOffset
-                        interpolator = AccelerateDecelerateInterpolator()
-                        addUpdateListener(this@ViewHolder.animatorListener)
-                        addListener(this@ViewHolder.animatorListener)
-                    }
-        }
-
-        private fun applyAnimationFraction(fraction: Float) {
-            val targetWidth = itemView.width.toFloat() / 2
+        private fun applyRevealFraction(fraction: Float) {
+            val targetWidth = itemView.width.toFloat()
             itemView.translationX = targetWidth - targetWidth * fraction
             itemView.alpha = fraction
         }

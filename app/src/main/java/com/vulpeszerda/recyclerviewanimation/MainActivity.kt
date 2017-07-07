@@ -10,6 +10,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var adapter: Adapter
     private lateinit var slideRevealHelper: SlideRevealHelper
+    private var reveal = 0.0f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,7 +23,7 @@ class MainActivity : AppCompatActivity() {
     private fun initLayout() {
         slideRevealHelper = SlideRevealHelper()
         adapter = Adapter(slideRevealHelper)
-        list.layoutManager = object: LinearLayoutManager(this) {
+        list.layoutManager = object : LinearLayoutManager(this) {
 
             override fun canScrollVertically(): Boolean {
                 return super.canScrollVertically() && slideRevealHelper.canScroll
@@ -40,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun doSomething() {
-        adapter.visible = !adapter.visible
+        reveal += 1f / 100
+        adapter.updateReveal(reveal, false)
     }
 }
