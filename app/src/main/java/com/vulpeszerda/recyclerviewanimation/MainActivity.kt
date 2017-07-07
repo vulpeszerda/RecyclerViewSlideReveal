@@ -2,17 +2,30 @@ package com.vulpeszerda.recyclerviewanimation
 
 import android.graphics.Color
 import android.os.Bundle
-import android.support.v4.widget.DrawerLayout
+import android.os.Handler
+import android.os.Looper
+import android.support.v4.view.ViewCompat
+import android.support.v4.widget.FakeDrawerLayout
+import android.support.v4.widget.FakeViewDragHelper
 import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.LinearLayoutManager
 import android.util.DisplayMetrics
+import android.util.Log
+import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.android.synthetic.main.drawer_right.*
+import kotlin.coroutines.experimental.EmptyCoroutineContext.plus
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var adapter: Adapter
     private lateinit var slideRevealHelper: SlideRevealHelper
+    private lateinit var drawerLayout: FakeDrawerLayout
+    private lateinit var rightDrawer: View
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,14 +43,28 @@ class MainActivity : AppCompatActivity() {
         val metrics = DisplayMetrics()
         windowManager.defaultDisplay.getMetrics(metrics)
         val fullWidth = metrics.widthPixels
-        val params = right_drawer.layoutParams as DrawerLayout.LayoutParams
-        params.width = fullWidth
-        right_drawer.layoutParams = params
 
-        drawer_layout.apply {
-            setScrimColor(Color.TRANSPARENT)
-            addDrawerListener(drawerListener)
-        }
+        val inflater = LayoutInflater.from(this)
+        rightDrawer = inflater.inflate(R.layout.drawer_right, null)
+        val drawerParams = FakeDrawerLayout.LayoutParams(
+                fullWidth,
+                ViewGroup.LayoutParams.MATCH_PARENT)
+        drawerParams.gravity = Gravity.END
+
+        drawerLayout = FakeDrawerLayout(this, DrawerDelegate(rightDrawer, fullWidth))
+        drawer_holder.addView(drawerLayout, 0, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT))
+
+        drawerLayout.addView(inflater.inflate(R.layout.content, drawerLayout, false),
+                FakeDrawerLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT))
+
+        drawerLayout.addView(rightDrawer, drawerParams)
+
+        drawerLayout.setScrimColor(Color.TRANSPARENT)
+        slideRevealHelper.setupWithDrawer(drawerLayout, list)
 
         list.layoutManager = object : LinearLayoutManager(this) {
 
@@ -57,63 +84,41 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun doSomething() {
-        if (drawer_layout.isDrawerOpen(right_drawer)) {
-            drawer_layout.closeDrawer(right_drawer)
+        val isOpen = drawerLayout.isDrawerOpen(rightDrawer)
+        Log.d("TEST11", "is open : $isOpen")
+        if (isOpen) {
+            drawerLayout.closeDrawer(rightDrawer)
         } else {
-            drawer_layout.openDrawer(right_drawer)
+            drawerLayout.openDrawer(rightDrawer)
         }
     }
 
-    private val drawerListener = object : DrawerLayout.DrawerListener {
+    private inner class DrawerDelegate(
+            private val targetView: View,
+            private val width: Int) : FakeViewDragHelper.ViewDelegate() {
 
-        private var prevState = DrawerLayout.STATE_IDLE
-        private var prevOffset = 0.0f
+        private var fakeLeft: Int = 0
 
-        override fun onDrawerStateChanged(newState: Int) {
-            prevState = newState
+        override fun getViewLeft(view: View): Int {
+            if (view != targetView) {
+                return super.getViewLeft(view)
+            }
+            val value = fakeLeft + width
+            return value
         }
 
-        override fun onDrawerSlide(drawerView: View?, slideOffset: Float) {
-            if (prevState != DrawerLayout.STATE_SETTLING) {
-                if (slideOffset == 0.0f) {
-                    unrevealIfNecessary()
-                } else if (slideOffset == 1.0f) {
-                    revealIfNecessary()
-                } else if (slideOffset > 0.0f && slideOffset < 1.0f) {
-                    slideRevealHelper.updateReveal(
-                            Math.min(Math.max(slideOffset / 1.5f, 0f), 1f), false)
+        override fun setViewOffsetLeftAndRight(view: View, offset: Int) {
+            if (view != targetView) {
+                return super.setViewOffsetLeftAndRight(view, offset)
+            }
+            fakeLeft += offset
+            if (fakeLeft < 0) {
+                if (targetView.left != 0) {
+                    ViewCompat.offsetLeftAndRight(targetView, -targetView.left)
                 }
-            } else if (slideOffset > prevOffset) {
-                revealIfNecessary()
-            } else if (slideOffset <= prevOffset) {
-                unrevealIfNecessary()
-            }
-            prevOffset = slideOffset
-        }
-
-        override fun onDrawerOpened(drawerView: View?) {
-            revealIfNecessary()
-        }
-
-        override fun onDrawerClosed(drawerView: View?) {
-            unrevealIfNecessary()
-        }
-
-        private fun unrevealIfNecessary() {
-            if (slideRevealHelper.let {
-                (it.isAnimating && it.isAnimatingToReveal) ||
-                        (it.appliedReveal != 0.0f && !it.isAnimating)
-            }) {
-                slideRevealHelper.updateReveal(0.0f, true)
-            }
-        }
-
-        private fun revealIfNecessary() {
-            if (slideRevealHelper.let {
-                (it.isAnimating && !it.isAnimatingToReveal) ||
-                        (it.appliedReveal != 1.0f && !it.isAnimating)
-            }) {
-                slideRevealHelper.updateReveal(1.0f, true)
+                targetView.visibility = View.VISIBLE
+            } else {
+                targetView.visibility = View.GONE
             }
         }
     }
