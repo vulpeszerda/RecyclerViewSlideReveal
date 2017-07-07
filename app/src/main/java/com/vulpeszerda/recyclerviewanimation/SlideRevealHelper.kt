@@ -4,16 +4,20 @@ import android.animation.Animator
 import android.animation.ValueAnimator
 import android.support.v7.widget.LinearLayoutManager
 import android.support.v7.widget.RecyclerView
-import android.util.Log
 import android.view.View
 import android.view.ViewTreeObserver
-import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.LinearInterpolator
 
 /**
  * Created by vulpes on 2017. 6. 27..
  */
-class SlideRevealHelper(private val maxAnimationDuration: Long = 500L,
-                        private val singleViewHolderAnimationRatio: Float = 1f / 3) {
+class SlideRevealHelper(private val maxAnimationDuration: Long = 400L,
+                        private val singleViewHolderAnimationRatio: Float = 1f / 3,
+                        private val controlRecyclerViewVisibility: Boolean = true) {
+
+    interface Listener {
+        fun onRevealChanged(reveal: Float, anim: Boolean)
+    }
 
     private var recyclerView: RecyclerView? = null
     private var prevGlobalLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
@@ -22,8 +26,13 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 500L,
     private var lastRequestedWithAnim = false
     private var lastRequestedReveal = 0.0f
 
-    private var appliedReveal = 0.0f
-        set(value) {
+    private val alphaInterpolator = LinearInterpolator()
+    private val slideInterpolator = LinearInterpolator()
+
+    private val listeners = ArrayList<Listener>()
+
+    var appliedReveal = 0.0f
+        private set(value) {
             val prev = field
             field = value
             if (prev != value) {
@@ -32,8 +41,13 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 500L,
         }
 
 
-    var canScroll: Boolean = false
+    val canScroll: Boolean
         get() = lastRequestedReveal == appliedReveal
+
+    val isAnimating: Boolean
+        get() = animator?.isRunning ?: false
+
+    var isAnimatingToReveal: Boolean = false
 
     fun onBindViewHolder(viewHolder: RecyclerView.ViewHolder?, position: Int) {
         (viewHolder as? ViewHolder)?.let {
@@ -75,7 +89,7 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 500L,
         }
         if (recyclerView.visibility == View.VISIBLE) {
             updateRevealInternal(reveal, withAnim)
-        } else if (reveal != appliedReveal || reveal > 0f) {
+        } else if (reveal != appliedReveal || reveal > 0f && controlRecyclerViewVisibility) {
             prevGlobalLayoutListener = object : ViewTreeObserver.OnGlobalLayoutListener {
                 override fun onGlobalLayout() {
                     updateRevealInternal(reveal, withAnim)
@@ -91,21 +105,43 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 500L,
         }
     }
 
-    private fun updateRevealInternal(reveal: Float, withAnim: Boolean) {
-        if (withAnim && reveal != appliedReveal) {
-            animator?.cancel()
+    fun addRevealListener(listener: Listener) {
+        synchronized(listeners) {
+            if (listeners.indexOf(listener) < 0) {
+                listeners.add(listener)
+            }
+        }
+    }
 
+    fun removeRevealListener(listener: Listener) {
+        synchronized(listeners) {
+            listeners.remove(listener)
+        }
+    }
+
+    private fun notifyRevealChanged() {
+        synchronized(listeners) {
+            listeners.forEach {
+                it.onRevealChanged(appliedReveal, lastRequestedWithAnim)
+            }
+        }
+    }
+
+    private fun updateRevealInternal(reveal: Float, withAnim: Boolean) {
+        animator?.cancel()
+        if (withAnim && reveal != appliedReveal) {
             val toValue = reveal
             val fromValue = appliedReveal
 
             animator = ValueAnimator.ofFloat(fromValue, toValue)
                     .apply {
                         duration = (maxAnimationDuration * Math.abs(fromValue - toValue)).toLong()
-                        interpolator = AccelerateDecelerateInterpolator()
+                        interpolator = LinearInterpolator()
                         addUpdateListener(animatorListener)
                         addListener(animatorListener)
                         start()
                     }
+            isAnimatingToReveal = toValue > fromValue
         } else {
             appliedReveal = reveal
         }
@@ -115,9 +151,10 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 500L,
         recyclerView?.let {
             forEachVisibleViewHolder(it, this::applyRevealFractionToViewHolder)
         }
-        if (reveal == 0f) {
+        if (reveal == 0f && controlRecyclerViewVisibility) {
             recyclerView?.visibility = View.GONE
         }
+        notifyRevealChanged()
     }
 
     private fun applyRevealFractionToViewHolder(viewHolder: ViewHolder,
@@ -125,12 +162,32 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 500L,
                                                 first: Int,
                                                 last: Int) {
         val fixedIndex = Math.max(Math.min(last, index), first)
+        viewHolder.fraction = ViewHolderFraction(
+                calViewHolderAlpha(appliedReveal, fixedIndex, first, last),
+                calViewHolderTranslation(appliedReveal, fixedIndex, first, last))
+    }
+
+    private fun calViewHolderAlpha(fraction: Float, index: Int, first: Int, last: Int): Float {
+        val fixedFraction = alphaInterpolator.getInterpolation(fraction)
         val singleFraction = singleViewHolderAnimationRatio
-        val childCount = last - first
+        val childCount = last - first + 1
         val cascadeFraction = (1f - singleFraction) / childCount
-        val startFraction = (fixedIndex - first) * cascadeFraction
-        viewHolder.fraction = Math.min(
-                Math.max((appliedReveal - startFraction) / singleFraction, 0f), 1f)
+        val startFraction = (index - first) * cascadeFraction
+        return Math.min(Math.max((fixedFraction - startFraction) / singleFraction, 0f), 1f)
+    }
+
+    private fun calViewHolderTranslation(fraction: Float,
+                                         index: Int,
+                                         first: Int,
+                                         last: Int): Float {
+        val fixedFraction = slideInterpolator.getInterpolation(fraction)
+        val childCount = last - first + 1
+        if (childCount < 2) {
+            return 1f
+        }
+        val cascadeFraction = 1f / (childCount - 1)
+        val startFraction = (index - first) * cascadeFraction
+        return Math.min(Math.max(fixedFraction + 1f - startFraction, 0f), 1f)
     }
 
     private inline fun forEachVisibleViewHolder(
@@ -166,6 +223,7 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 500L,
                 }
             }
             animator = null
+            isAnimatingToReveal = false
         }
 
         override fun onAnimationCancel(animation: Animator?) {
@@ -184,14 +242,14 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 500L,
 
     open class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
 
-        var fraction: Float = 1f
+        var fraction: ViewHolderFraction = ViewHolderFraction(0f, 0f)
             set(value) {
                 field = value
-                applyRevealFraction(value)
+                applyFraction(value)
             }
 
         private val layoutListener = ViewTreeObserver.OnGlobalLayoutListener {
-            applyRevealFraction(fraction)
+            applyFraction(fraction)
         }
 
         fun onAttachedToRecyclerView() {
@@ -210,10 +268,12 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 500L,
             }
         }
 
-        private fun applyRevealFraction(fraction: Float) {
+        private fun applyFraction(fraction: ViewHolderFraction) {
             val targetWidth = itemView.width.toFloat()
-            itemView.translationX = targetWidth - targetWidth * fraction
-            itemView.alpha = fraction
+            itemView.translationX = targetWidth - targetWidth * fraction.translation
+            itemView.alpha = fraction.alpha
         }
     }
+
+    data class ViewHolderFraction(val alpha: Float, val translation: Float)
 }

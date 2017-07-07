@@ -15,10 +15,6 @@ class Adapter(private val slideRevealHelper: SlideRevealHelper)
 
     private val items = ArrayList<String>()
 
-    fun updateReveal(reveal: Float, smooth: Boolean) {
-        slideRevealHelper.updateReveal(reveal, smooth)
-    }
-
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         return ViewHolder.create(LayoutInflater.from(parent.context), parent)
     }
