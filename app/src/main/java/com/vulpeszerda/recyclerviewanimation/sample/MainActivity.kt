@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
         drawer_layout.setScrimColor(Color.TRANSPARENT)
         drawer_layout.setFakeTarget(right_drawer)
 
-        slideRevealHelper.setupWithDrawer(drawer_layout, list)
+        slideRevealHelper.setupWithDrawer(drawer_layout)
 
         list.layoutManager = object : LinearLayoutManager(this) {
 

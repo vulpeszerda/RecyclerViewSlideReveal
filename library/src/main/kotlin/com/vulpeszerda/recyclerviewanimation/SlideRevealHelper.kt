@@ -314,7 +314,6 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 400L,
             val targetWidth = itemView.width.toFloat() / 2
             itemView.translationX = targetWidth - targetWidth * fraction
             itemView.alpha = fraction
-            Log.d("TEST11", "apply fraction: $fraction")
         }
     }
 }
