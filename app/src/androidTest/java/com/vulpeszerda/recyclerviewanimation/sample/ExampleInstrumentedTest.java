@@ -1,4 +1,4 @@
-package com.vulpeszerda.recyclerviewanimation;
+package com.vulpeszerda.recyclerviewanimation.sample;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;

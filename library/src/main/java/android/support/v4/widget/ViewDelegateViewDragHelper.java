@@ -1,10 +1,8 @@
 package android.support.v4.widget;
 
 import android.content.Context;
-import android.support.annotation.NonNull;
 import android.support.v4.view.MotionEventCompat;
 import android.support.v4.view.VelocityTrackerCompat;
-import android.support.v4.view.ViewCompat;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
@@ -37,7 +35,7 @@ import java.util.Arrays;
  * of useful operations and state tracking for allowing a user to drag and reposition
  * views within their parent ViewGroup.
  */
-public class FakeViewDragHelper {
+public class ViewDelegateViewDragHelper {
 
     private static final String TAG = "FakeViewDragHelper";
 
@@ -289,7 +287,7 @@ public class FakeViewDragHelper {
          * the view is already captured; this indicates that a new pointer is trying to take
          * control of the view.</p>
          * <p>
-         * <p>If this method returns true, a call to {@link #onViewCaptured(android.view.View, int)}
+         * <p>If this method returns true, a call to {@link #onViewCaptured(View, int)}
          * will follow if the capture is successful.</p>
          *
          * @param child     Child the user is attempting to capture
@@ -352,10 +350,10 @@ public class FakeViewDragHelper {
      * @param cb        Callback to provide information and receive events
      * @return a new FakeViewDragHelper instance
      */
-    public static FakeViewDragHelper create(ViewGroup forParent,
-                                            Callback cb,
-                                            ViewDelegate delegate) {
-        return new FakeViewDragHelper(forParent.getContext(), forParent, cb, delegate);
+    public static ViewDelegateViewDragHelper create(ViewGroup forParent,
+                                                    Callback cb,
+                                                    ViewDelegate delegate) {
+        return new ViewDelegateViewDragHelper(forParent.getContext(), forParent, cb, delegate);
     }
 
     /**
@@ -367,11 +365,11 @@ public class FakeViewDragHelper {
      * @param cb          Callback to provide information and receive events
      * @return a new FakeViewDragHelper instance
      */
-    public static FakeViewDragHelper create(ViewGroup forParent,
-                                            float sensitivity,
-                                            Callback cb,
-                                            ViewDelegate delegate) {
-        final FakeViewDragHelper helper = create(forParent, cb, delegate);
+    public static ViewDelegateViewDragHelper create(ViewGroup forParent,
+                                                    float sensitivity,
+                                                    Callback cb,
+                                                    ViewDelegate delegate) {
+        final ViewDelegateViewDragHelper helper = create(forParent, cb, delegate);
         helper.mTouchSlop = (int) (helper.mTouchSlop * (1 / sensitivity));
         return helper;
     }
@@ -384,10 +382,10 @@ public class FakeViewDragHelper {
      * @param context   Context to initialize config-dependent params from
      * @param forParent Parent view to monitor
      */
-    private FakeViewDragHelper(Context context,
-                               ViewGroup forParent,
-                               Callback cb,
-                               ViewDelegate viewDelegate) {
+    private ViewDelegateViewDragHelper(Context context,
+                                       ViewGroup forParent,
+                                       Callback cb,
+                                       ViewDelegate viewDelegate) {
         if (forParent == null) {
             throw new IllegalArgumentException("Parent view may not be null");
         }
@@ -469,7 +467,7 @@ public class FakeViewDragHelper {
 
     /**
      * Capture a specific child view for dragging within the parent. The callback will be notified
-     * but {@link Callback#tryCaptureView(android.view.View, int)} will not be asked permission to
+     * but {@link Callback#tryCaptureView(View, int)} will not be asked permission to
      * capture this view.
      *
      * @param childView       Child view to capture
@@ -511,7 +509,7 @@ public class FakeViewDragHelper {
 
     /**
      * The result of a call to this method is equivalent to
-     * {@link #processTouchEvent(android.view.MotionEvent)} receiving an ACTION_CANCEL event.
+     * {@link #processTouchEvent(MotionEvent)} receiving an ACTION_CANCEL event.
      */
     public void cancel() {
         mActivePointerId = INVALID_POINTER;
@@ -737,7 +735,7 @@ public class FakeViewDragHelper {
      *
      * @param deferCallbacks true if state callbacks should be deferred via posted message.
      *                       Set this to true if you are calling this method from
-     *                       {@link android.view.View#computeScroll()} or similar methods
+     *                       {@link View#computeScroll()} or similar methods
      *                       invoked as part of layout or drawing.
      * @return true if settle is still in progress
      */
@@ -882,8 +880,8 @@ public class FakeViewDragHelper {
      * of the FakeViewDragHelper's knowledge).
      * <p>
      * <p>The state used to report this information is populated by the methods
-     * {@link #shouldInterceptTouchEvent(android.view.MotionEvent)} or
-     * {@link #processTouchEvent(android.view.MotionEvent)}. If one of these methods has not
+     * {@link #shouldInterceptTouchEvent(MotionEvent)} or
+     * {@link #processTouchEvent(MotionEvent)}. If one of these methods has not
      * been called for all relevant MotionEvents to track, the information reported
      * by this method may be stale or incorrect.</p>
      *
@@ -1339,8 +1337,8 @@ public class FakeViewDragHelper {
      * the required slop threshold.
      * <p>
      * <p>This depends on internal state populated by
-     * {@link #shouldInterceptTouchEvent(android.view.MotionEvent)} or
-     * {@link #processTouchEvent(android.view.MotionEvent)}. You should only rely on
+     * {@link #shouldInterceptTouchEvent(MotionEvent)} or
+     * {@link #processTouchEvent(MotionEvent)}. You should only rely on
      * the results of this method after all currently available touch data
      * has been provided to one of these two methods.</p>
      *
@@ -1363,8 +1361,8 @@ public class FakeViewDragHelper {
      * the required slop threshold.
      * <p>
      * <p>This depends on internal state populated by
-     * {@link #shouldInterceptTouchEvent(android.view.MotionEvent)} or
-     * {@link #processTouchEvent(android.view.MotionEvent)}. You should only rely on
+     * {@link #shouldInterceptTouchEvent(MotionEvent)} or
+     * {@link #processTouchEvent(MotionEvent)}. You should only rely on
      * the results of this method after all currently available touch data
      * has been provided to one of these two methods.</p>
      *
@@ -1538,93 +1536,46 @@ public class FakeViewDragHelper {
     }
 
     protected int getViewLeft(View view) {
-        return mFakeViewDelegate.getViewLeft(view);
+        return mFakeViewDelegate.getLeft(view);
     }
 
     protected int getViewTop(View view) {
-        return mFakeViewDelegate.getViewTop(view);
+        return mFakeViewDelegate.getTop(view);
     }
 
     protected int getViewRight(View view) {
-        return mFakeViewDelegate.getViewRight(view);
+        return mFakeViewDelegate.getRight(view);
     }
 
     protected int getViewBottom(View view) {
-        return mFakeViewDelegate.getViewBottom(view);
+        return mFakeViewDelegate.getBottom(view);
     }
 
     protected void setViewOffsetLeftAndRight(View view, int offset) {
-        mFakeViewDelegate.setViewOffsetLeftAndRight(view, offset);
+        mFakeViewDelegate.offsetLeftAndRight(view, offset);
     }
 
     protected void setViewOffsetTopAndBottom(View view, int offset) {
-        mFakeViewDelegate.setViewOffsetTopAndBottom(view, offset);
+        mFakeViewDelegate.offsetTopAndBottom(view, offset);
     }
 
     protected boolean canViewScrollHorizontally(View view, int dx) {
-        return mFakeViewDelegate.canViewScrollHorizontally(view, dx);
+        return mFakeViewDelegate.canScrollHorizontally(view, dx);
     }
 
     protected boolean canViewScrollVertically(View view, int dx) {
-        return mFakeViewDelegate.canViewScrollVertically(view, dx);
+        return mFakeViewDelegate.canScrollVertically(view, dx);
     }
 
     protected int getViewScrollX(View view) {
-        return mFakeViewDelegate.getViewScrollX(view);
+        return mFakeViewDelegate.getScrollX(view);
     }
 
     protected int getViewScrollY(View view) {
-        return mFakeViewDelegate.getViewScrollY(view);
+        return mFakeViewDelegate.getScrollY(view);
     }
 
     protected int getViewWidth(View view) {
-        return mFakeViewDelegate.getViewWidth(view);
-    }
-
-    public static class ViewDelegate {
-
-        protected int getViewLeft(@NonNull View view) {
-            return view.getLeft();
-        }
-
-        protected int getViewTop(@NonNull View view) {
-            return view.getTop();
-        }
-
-        protected int getViewRight(@NonNull View view) {
-            return view.getRight();
-        }
-
-        protected int getViewBottom(@NonNull View view) {
-            return view.getBottom();
-        }
-
-        protected void setViewOffsetLeftAndRight(@NonNull View view, int offset) {
-            ViewCompat.offsetLeftAndRight(view, offset);
-        }
-
-        protected void setViewOffsetTopAndBottom(@NonNull View view, int offset) {
-            ViewCompat.offsetTopAndBottom(view, offset);
-        }
-
-        protected boolean canViewScrollHorizontally(@NonNull View view, int dx) {
-            return ViewCompat.canScrollHorizontally(view, dx);
-        }
-
-        protected boolean canViewScrollVertically(@NonNull View view, int dx) {
-            return ViewCompat.canScrollVertically(view, dx);
-        }
-
-        protected int getViewScrollX(@NonNull View view) {
-            return view.getScrollX();
-        }
-
-        protected int getViewScrollY(@NonNull View view) {
-            return view.getScrollY();
-        }
-
-        protected int getViewWidth(@NonNull View view) {
-            return view.getWidth();
-        }
+        return mFakeViewDelegate.getWidth(view);
     }
 }

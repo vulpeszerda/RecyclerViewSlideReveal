@@ -5,7 +5,15 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="com.vulpeszerda.recyclerviewanimation.MainActivity">
+    tools:context="com.vulpeszerda.recyclerviewanimation.sample.MainActivity">
+
+    <com.vulpeszerda.recyclerviewanimation.FakeDrawerLayout
+        android:id="@+id/drawer_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <include layout="@layout/content"/>
+        <include layout="@layout/drawer_right"/>
+    </com.vulpeszerda.recyclerviewanimation.FakeDrawerLayout>
 
     <Button
         android:id="@+id/btn_do"

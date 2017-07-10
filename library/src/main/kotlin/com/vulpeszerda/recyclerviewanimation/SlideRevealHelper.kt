@@ -3,16 +3,15 @@ package com.vulpeszerda.recyclerviewanimation
 import android.animation.Animator
 import android.animation.ValueAnimator
 import android.support.v4.widget.DrawerLayout
-import android.support.v4.widget.FakeDrawerLayout
+import android.support.v4.widget.ViewDelegateDrawerLayout
 import android.support.v7.widget.LinearLayoutManager
 import android.support.v7.widget.RecyclerView
-import android.util.Log
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.animation.AccelerateDecelerateInterpolator
 
 /**
- * Created by vulpes on 2017. 6. 27..
+ * Created by vulpes on 2017. 7. 10..
  */
 class SlideRevealHelper(private val maxAnimationDuration: Long = 400L,
                         private val singleViewHolderAnimationRatio: Float = 1f / 3,
@@ -119,7 +118,7 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 400L,
         }
     }
 
-    fun setupWithDrawer(drawerLayout: FakeDrawerLayout, view: View) {
+    fun setupWithDrawer(drawerLayout: ViewDelegateDrawerLayout, view: View) {
         val listener = DrawerListener(view)
         drawerLayout.addDrawerListener(listener)
         addRevealListener(listener)
@@ -229,7 +228,7 @@ class SlideRevealHelper(private val maxAnimationDuration: Long = 400L,
         }
     }
 
-    private inner class DrawerListener(private val view: View) : FakeDrawerLayout.DrawerListener, Listener {
+    private inner class DrawerListener(private val view: View) : ViewDelegateDrawerLayout.DrawerListener, Listener {
 
         override fun onRevealChanged(reveal: Float, anim: Boolean) {
         }

@@ -1,10 +1,12 @@
-package com.vulpeszerda.recyclerviewanimation
+package com.vulpeszerda.recyclerviewanimation.sample
 
 import android.support.v7.util.DiffUtil
 import android.support.v7.widget.RecyclerView
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import com.vulpeszerda.recyclerviewanimation.sample.R
+import com.vulpeszerda.recyclerviewanimation.SlideRevealHelper
 import kotlinx.android.synthetic.main.item.view.*
 
 /**
@@ -16,7 +18,9 @@ class Adapter(private val slideRevealHelper: SlideRevealHelper)
     private val items = ArrayList<String>()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-        return ViewHolder.create(LayoutInflater.from(parent.context), parent)
+        return ViewHolder.create(
+                LayoutInflater.from(parent.context),
+                parent)
     }
 
     override fun getItemCount(): Int {
@@ -51,7 +55,9 @@ class Adapter(private val slideRevealHelper: SlideRevealHelper)
 
 
     fun setItems(items: List<String>) {
-        val result = DiffUtil.calculateDiff(DiffCallback(this.items, items))
+        val result = DiffUtil.calculateDiff(DiffCallback(
+                this.items,
+                items))
         this.items.clear()
         this.items.addAll(items)
         result.dispatchUpdatesTo(this)
@@ -66,7 +72,10 @@ class Adapter(private val slideRevealHelper: SlideRevealHelper)
         companion object {
             @JvmStatic
             fun create(inflater: LayoutInflater, parent: ViewGroup): ViewHolder {
-                return ViewHolder(inflater.inflate(R.layout.item, parent, false))
+                return ViewHolder(inflater.inflate(
+                        R.layout.item,
+                        parent,
+                        false))
             }
         }
     }
